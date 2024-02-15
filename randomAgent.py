@@ -11,7 +11,7 @@ class randomFiarAgent:
     def filterCol(self, el):
             return self.env.column_height(el) != self.env.rows
 
-    def select_col(self):
+    def select_col(self, env):
 
         available_rows = list(filter(self.filterCol, range(0, self.env.columns)))
         
