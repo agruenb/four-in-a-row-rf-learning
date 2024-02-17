@@ -256,6 +256,13 @@ class FourInRowGame:
             for column in range(self.columns):
                 slots[row, column] = self.slots[row, column].value
         return slots
+    
+    def get_simple_slots_negative(self):
+        slots = np.zeros((self.rows, self.columns), dtype=int)
+        for row in range(self.rows):
+            for column in range(self.columns):
+                slots[row, column] = -1 if self.slots[row, column].value == 2 else self.slots[row, column].value
+        return slots
 
     def print(self):
         for i in range(self.rows - 1, -1, -1):
