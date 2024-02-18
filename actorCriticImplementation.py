@@ -3,6 +3,7 @@ import tensorflow as tf
 import collections
 import statistics
 import tqdm
+import random
 
 from tensorflow.keras import layers
 from typing import Any, List, Tuple
@@ -41,38 +42,54 @@ class ActorCriticWrapper(tf.keras.Model):
             super().__init__()
 
             self.common = layers.Dense(num_hidden_units, activation="relu")
+            # elf.commonDeep = layers.Dense(num_hidden_units, activation="relu")
             self.actor = layers.Dense(num_actions)
             self.critic = layers.Dense(1)
 
         def call(self, inputs: tf.Tensor) -> Tuple[tf.Tensor, tf.Tensor]:
+            # x = self.common(self.commonDeep(inputs))
             x = self.common(inputs)
             return self.actor(x), self.critic(x)
 
-def newAgent(env, hidden_units, adversaryAgent, playerColor):
+def newAgent(env, hidden_units, adversaryAgent, playerColor, max_episodes = 10000):
+
+    adversary = ""
+    multiple_adversaries = isinstance(adversaryAgent, list)
+    if(multiple_adversaries):
+        adversary = adversaryAgent[0]
+    else:
+        adversary = adversaryAgent
 
     num_actions = env.columns
     num_hidden_units = hidden_units
     eps = np.finfo(np.float32).eps.item()
-    adversary = adversaryAgent
     model = ActorCriticWrapper(num_actions, num_hidden_units)
     optimizer = tf.keras.optimizers.legacy.Adam(learning_rate=0.01)
     huber_loss = tf.keras.losses.Huber(reduction=tf.keras.losses.Reduction.SUM)
 
+    min_episodes_criterion = 100
+    max_steps_per_episode = int((env.columns*env.rows)/2)
+
+    reward_threshold = 950
+
+    # The discount factor for future rewards
+    gamma = 0.99
+
     def env_step(action):
         # invalid move
         if env.column_height(action) == env.rows:
-            return np.array(env.get_simple_slots_negative()).reshape(-1), -500, True
+            return np.array(env.get_simple_slots_negative()).reshape(-1), -200, True
         # rf agent victory
         agent_victory = env.play_game(Chip.YELLOW if playerColor == Chip.YELLOW else Chip.RED, action)
         if agent_victory:
-            return np.array(env.get_simple_slots_negative()).reshape(-1), 100, True
+            return np.array(env.get_simple_slots_negative()).reshape(-1), 40, True
         # adversary agent victory
         rand_col = adversary.select_col(env)
         random_victory = env.play_game(Chip.RED if playerColor == Chip.YELLOW else Chip.YELLOW, rand_col)
         if random_victory:
-            return np.array(env.get_simple_slots_negative()).reshape(-1), -100, True
+            return np.array(env.get_simple_slots_negative()).reshape(-1), -40, True
         # no victory
-        return np.array(env.get_simple_slots_negative()).reshape(-1), 0, False
+        return np.array(env.get_simple_slots_negative()).reshape(-1), 1, False
 
 
     @tf.numpy_function(Tout=[tf.int32, tf.int32, tf.int32])
@@ -96,6 +113,7 @@ def newAgent(env, hidden_units, adversaryAgent, playerColor):
         rewards = tf.TensorArray(dtype=tf.int32, size=0, dynamic_size=True)
 
         initial_state_shape = initial_state.shape
+
         state = initial_state
 
         for t in tf.range(max_steps):
@@ -211,24 +229,29 @@ def newAgent(env, hidden_units, adversaryAgent, playerColor):
 
         return episode_reward
 
-    def run():
-
-        min_episodes_criterion = 100
-        max_episodes = 10000
-        max_steps_per_episode = int(env.columns*env.rows/2)
-
-        reward_threshold = 500
-        running_reward = 0
-
-        # The discount factor for future rewards
-        gamma = 0.99
+    def run(adversary):
 
         # Keep the last episodes reward
         episodes_reward: collections.deque = collections.deque(maxlen=min_episodes_criterion)
 
         t = tqdm.trange(max_episodes)
         for i in t:
+            # switch adversaries
+            if(multiple_adversaries and i == int(max_episodes/2)):
+                print("Switching Adversary")
+                adversary = adversaryAgent[1]
+
             env.reset()
+            #randomize which player starts
+            if(random.randint(0,1) == 1):
+                # print("Adversary Starts")
+                andver_col = adversary.select_col(env)
+                # print("First col: " + str(andver_col))
+                env.play_game(Chip.RED if playerColor == Chip.YELLOW else Chip.YELLOW, andver_col)
+                # print("First gamestate: ")
+                # env.print()
+
+            # switch adversary if multiple are given
             initial_state = np.array(env.get_simple_slots_negative()).reshape(-1)
             initial_state = tf.constant(initial_state, dtype=tf.int32)
             episode_reward = int(train_step(
@@ -246,7 +269,8 @@ def newAgent(env, hidden_units, adversaryAgent, playerColor):
 
         print(f'\nSolved at episode {i}: average reward: {running_reward:.2f}!')
 
-    run()
+    print(adversary)
+    run(adversary)
 
     return model
 
