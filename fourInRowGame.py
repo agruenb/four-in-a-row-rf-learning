@@ -222,7 +222,7 @@ class FourInRowGame:
         if Chip.RED in window and Chip.YELLOW not in window:
             no_of_chips = [chip == Chip.RED for chip in window]
             if sum(no_of_chips) == 1:
-                return 0
+                return 1
             elif sum(no_of_chips) == 2:
                 return 20
             elif sum(no_of_chips) == 3:
@@ -234,7 +234,7 @@ class FourInRowGame:
         if Chip.YELLOW in window and Chip.RED not in window:
             no_of_chips = [chip == Chip.YELLOW for chip in window]
             if sum(no_of_chips) == 1:
-                return -0
+                return -1
             elif sum(no_of_chips) == 2:
                 return -20
             elif sum(no_of_chips) == 3:

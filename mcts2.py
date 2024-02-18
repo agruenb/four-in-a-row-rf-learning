@@ -10,32 +10,29 @@ import random
 import time
 import numpy as np
 from fourInRowGame import Chip, FourInRowGame
-
-
-tree = {}
-tree[1] = { 'player': Chip.RED,
-                       'child': [], 'parent': None,
-                       'total_node_visits':0, 'total_node_wins':0,
-                       'drop':math.inf}
-
+#simple example how two MCTS players would play against each other
 env = FourInRowGame(6, 7)
 
 while not env.check_for_victory():
     red_tree = build_tree(Chip.RED)
-    search(red_tree,env)
+    search(red_tree,env,5000)
     drop = best_move(red_tree)
     env.drop(Chip.RED,drop)
     if env.check_for_victory():
         env.print()
         break
-    yellow_tree = build_tree(Chip.YELLOW)
-    search(yellow_tree,env)
-    drop = best_move(yellow_tree)
+    drop = mcts_player(env,Chip.YELLOW,5000)
     env.drop(Chip.YELLOW,drop)
     env.print()
     print('------')
 
+#standard mcts implementation
+def mcts_player(env,chip_,rollouts):
+    tree = build_tree(chip_)
+    search(tree,env,rollouts)
+    return best_move(tree)
 
+#build a tree with only the root
 def build_tree(chip_):
     tree = {}
     tree[1] = { 'player': get_opposite_player(chip_),
@@ -44,9 +41,9 @@ def build_tree(chip_):
                            'drop':math.inf}
     return tree
 
+#choose best move from the children of the tree
+#that is generally the child with the most visits
 def best_move(tree):
-#    if self.root_state.game_over():
-#        return -11
     root_childs = tree[1]['child']
     max_value = max([tree[c]['total_node_visits'] for c in root_childs])
 
@@ -55,20 +52,21 @@ def best_move(tree):
 
     return tree[best_child]['drop']
 
-def search(tree, env):
+#simulate rollouts many possible games
+#choose node with highest UCB until leaf and rollout
+def search(tree, env, rollouts):
     start_time = time.process_time()
 
     num_rollouts = 0
-    while num_rollouts < 10000:
+    while num_rollouts < rollouts:
         node, env_c = select_nodes(tree,1,env)
         outcome = roll_out(env_c,tree[node]['player'])
         back_propagate(tree,node,outcome)
         num_rollouts += 1 # for calculating statistics
 
-    #run_time = time.process_time() - start_time
-    #self.run_time = run_time
-    #self.num_rollouts = num_rollouts
-
+    
+#move the value up alternating between the players
+#until root node reached
 def back_propagate(tree, node_id, chip_):
     # For the current player, not the next player
     reward = 0 if chip_ != tree[node_id]['player'] else 1
@@ -84,6 +82,7 @@ def back_propagate(tree, node_id, chip_):
             reward = 1 - reward # alternates between 0 and 1 because each alternate depth represents different player turns
     tree[node_id]['total_node_visits'] += 1
     
+# check if outcome is victory by a player or board is full and return
 def get_outcome(env):
         if env.check_for_victory():
             if env.check_for_victory_red():
@@ -93,7 +92,7 @@ def get_outcome(env):
         else:
             return Chip.EMPTY
     
-
+#make random moves until won or board is full
 def roll_out(env,chip_):
     while not env.field_is_full() and not env.check_for_victory():
         chip_ = get_opposite_player(chip_)
@@ -104,6 +103,7 @@ def roll_out(env,chip_):
     #env.print()
     return get_outcome(env)
 
+# get children of currenct node until leave (no children) is reached
 def select_nodes(tree,node_id,env):
     
     node = node_id
@@ -130,12 +130,14 @@ def select_nodes(tree,node_id,env):
         #print('expand ',tree[node])
     return node,env_c
 
+# invert the chip color
 def get_opposite_player(chip_):
     if chip_ == Chip.YELLOW:
         return Chip.RED
     else:
         return Chip.YELLOW
     
+# add children to the tree for possible next moves    
 def expand(tree, node_id, env):
     children = env.get_next_moves()
     for i in children:
@@ -143,7 +145,7 @@ def expand(tree, node_id, env):
 
     return children    
     
-
+#tree structure was implemented using a dictionary
 def add_children(tree,parent_id,drop):
     new_id = max(list(tree.keys()))+1
     tree[new_id] = {'player': get_opposite_player(tree[parent_id]['player']),
@@ -154,7 +156,7 @@ def add_children(tree,parent_id,drop):
     new_childs.append(new_id)
     tree[parent_id]['child'] = new_childs
     
-
+#calculate UCB from node
 def get_value(tree,node_id):
     if tree[node_id]['total_node_visits'] == 0:
         return math.inf
